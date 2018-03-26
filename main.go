@@ -3,27 +3,78 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
+
+	"github.com/google/uuid"
 )
 
 const COMPOSE_FILE_NAME = "docker-compose.yml"
 
+var REGEX_BEARER_TOKEN = regexp.MustCompile("^Bearer (.+)$")
 var REGEX_UPDATE = regexp.MustCompile("^/update/([a-zA-Z0-9_\\-]+)/?$")
 
 var projectsBaseDir string
 var port int
+var tokenFilePath string
+var expectedToken string
 
 func main() {
 	flag.StringVar(&projectsBaseDir, "projectBaseDir", "/root/", "directory where all your projects are located")
 	flag.IntVar(&port, "port", 8080, "listening port")
+	flag.StringVar(&tokenFilePath, "authTokenFile", "/root/.compose-updater.token", "file where the auth-token will be stored")
 	flag.Parse()
 
-	http.HandleFunc("/update/", updateHandler)
+	expectedToken = loadExpectedToken()
+
+	http.Handle("/update/", authMiddleware(http.HandlerFunc(updateHandler)))
 	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+}
+
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		match := REGEX_BEARER_TOKEN.FindStringSubmatch(authHeader)
+		if match == nil {
+			fmt.Printf("rejected %v: missing token\n", r.RemoteAddr)
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		token := match[1]
+		if token != expectedToken {
+			fmt.Printf("rejected %v: invalid token\n", r.RemoteAddr)
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func loadExpectedToken() string {
+	data, err := ioutil.ReadFile(tokenFilePath)
+	if err != nil {
+		fmt.Printf("could not read token-file '%v'\n", tokenFilePath)
+		return generateAndWriteToken()
+	}
+	if _, err := uuid.ParseBytes(data); err != nil {
+		fmt.Printf("invalid in token-file '%v'\n", tokenFilePath)
+		return generateAndWriteToken()
+	}
+	token := string(data)
+	fmt.Println("auth-token:", token)
+	return token
+}
+
+func generateAndWriteToken() string {
+	fmt.Println("generating new auth-token ...")
+	token := uuid.New().String()
+	ioutil.WriteFile(tokenFilePath, []byte(token), 0600)
+	fmt.Println("auth-token:", token)
+	return token
 }
 
 func updateHandler(w http.ResponseWriter, r *http.Request) {
