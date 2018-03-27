@@ -26,7 +26,7 @@ var expectedToken string
 func main() {
 	flag.StringVar(&projectsBaseDir, "projectBaseDir", "/root/", "directory where all your projects are located")
 	flag.IntVar(&port, "port", 8080, "listening port")
-	flag.StringVar(&tokenFilePath, "authTokenFile", "/root/.compose-updater.token", "file where the auth-token will be stored")
+	flag.StringVar(&tokenFilePath, "authTokenFile", "/root/.compose-trigger.token", "file where the auth-token will be stored")
 	flag.Parse()
 
 	expectedToken = loadExpectedToken()
