@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -32,7 +33,7 @@ func main() {
 	expectedToken = loadExpectedToken()
 
 	http.Handle("/update/", authMiddleware(http.HandlerFunc(updateHandler)))
-	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
 
 func authMiddleware(next http.Handler) http.Handler {
@@ -93,14 +94,14 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Printf("%v: pulling ...\n", projectID)
-	cmd1 := exec.Command("docker-compose", "-f", composeFilePath, "pull")
-	cmd1.Start()
-	cmd1.Wait()
+	pullCommand := exec.Command("docker-compose", "-f", composeFilePath, "pull")
+	pullCommand.Start()
+	pullCommand.Wait()
 
 	fmt.Printf("%v: starting ...\n", projectID)
-	cmd2 := exec.Command("docker-compose", "-f", composeFilePath, "up", "-d")
-	cmd2.Start()
-	cmd2.Wait()
+	upCommand := exec.Command("docker-compose", "-f", composeFilePath, "up", "-d")
+	upCommand.Start()
+	upCommand.Wait()
 	fmt.Printf("%v: done\n", projectID)
 
 	w.WriteHeader(http.StatusOK)
